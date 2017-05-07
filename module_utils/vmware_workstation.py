@@ -161,18 +161,28 @@ def listvms(filter_unknown=True):
         guest_info = guestinfo(k)
         for k2, v2 in guest_info.items():
             vms[k][k2] = v2
+        if not vms[k].get('config'):
+            vms[k]['config'] = k
 
+    '''
     # get rid of anything that is in a bad state
     if filter_unknown:
         to_remove = []
         for k, v in vms.items():
             config = v.get('config')
             if not config or not os.path.isfile(config):
+                if config is None:
+                    for k2,v2 in v.items():
+                        import q; q(k2)
+                        import q; q(v2)
                 to_remove.append(k)
         if to_remove:
             for tr in to_remove:
+                import q; q('remove2 %s' % tr)
                 vms.pop(tr, None)
+    '''
 
+    import q; q(vms.keys())
     return vms
 
 
@@ -180,14 +190,23 @@ def get_workstation_vm_by_name(name):
     vms = listvms(filter_unknown=True)
     import q; q(vms.keys())
     for k, v in vms.items():
-        if v.get('DisplayName') == name:
+        if v.get('DisplayName') == name or v.get('displayname') == name:
             return v
+        else:
+            import q; q('%s != %s' % (v.get('DisplayName'), name))
     return None
 
 
 def clone_vm(name, vmxpath, template_vmxpath):
     cmd = 'vmrun -T ws clone %s %s full -cloneName="%s"' % \
         (template_vmxpath, vmxpath, name)
+    (rc, so, se) = run_command(cmd, use_unsafe_shell=True)
+    return (cmd, rc, so, se)
+
+
+def import_ova(ovafile, vmware_dir='~/vmware'):
+    vmware_dir = os.path.expanduser(vmware_dir)
+    cmd = 'ovftool %s %s' % (ovafile, vmware_dir)
     (rc, so, se) = run_command(cmd, use_unsafe_shell=True)
     return (cmd, rc, so, se)
 

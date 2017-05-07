@@ -2,16 +2,26 @@
   connection: local
   gather_facts: False
   tasks:
-      - name: delete the guest
+      - name: delete the guest(s)
         vmware_ws_guest:
-            name: testvm
+            name: "{{ item }}"
             state: absent
+        with_items:
+            - template_centos_7
+            - centos-7_vmware_tools
+            - testvm
         failed_when: False
 
-        #- fail: msg="debug"
+      - name: import the centos7 ova
+        vmware_ws_guest:
+            name: centos-7_vmware_tools
+            state: present
+            ova: /home/jtanner/Desktop/centos-7_vmware_tools.ova
+
+      #- fail: msg="debug"
 
       - name: create the guest
         vmware_ws_guest:
             name: testvm
             state: poweredon
-            template: centos-7
+            template: centos-7_vmware_tools

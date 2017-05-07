@@ -28,7 +28,7 @@ DOCUMENTATION = '''
 module: vmware_ws_guest
 short_description: Manages virtual machines in vmware workstation
 description:
-    - Create new virtual machines (from templates or not)
+    - Create new virtual machines (from templates or OVAs)
     - Power on/power off/restart a virtual machine
     - Modify, rename or remove a virtual machine
 version_added: 2.4
@@ -55,6 +55,10 @@ options:
             - Template used to create VM.
             - If this value is not set, VM is created without using a template.
             - If the VM exists already this setting will be ignored.
+   ova:
+        description:
+            - OVA file to import.
+            - If the VM exists already this setting will be ignored.
 '''
 
 EXAMPLES = '''
@@ -75,6 +79,7 @@ from ansible.module_utils.six import iteritems
 from ansible.module_utils.vmware_workstation import clone_vm
 from ansible.module_utils.vmware_workstation import delete_vm
 from ansible.module_utils.vmware_workstation import get_workstation_vm_by_name
+from ansible.module_utils.vmware_workstation import import_ova
 from ansible.module_utils.vmware_workstation import start_vm
 from ansible.module_utils.vmware_workstation import stop_vm
 
@@ -110,6 +115,7 @@ def main():
                 choices=state_options + power_options,
                 default='present'),
             template_src=dict(type='str', aliases=['template']),
+            ova=dict(type='str'),
             name=dict(required=True, type='str'),
         ),
         supports_check_mode=True,
@@ -121,12 +127,16 @@ def main():
         'operations': []
     }
 
+    import q; q(module.params['name'])
     vm = get_workstation_vm_by_name(module.params['name'])
+    import q; q(vm)
 
     if vm:
         # VM already exists
 
         if module.params['state'] == 'absent':
+
+            import q; q('absent')
 
             # has to be poweredoff first
             (cmd, rc, so, se) = stop_vm(vm['config'])
@@ -152,11 +162,15 @@ def main():
             shutil.rmtree(vmxdir)
 
         elif module.params['state'] == 'present':
+
+            import q; q('present')
             pass
 
         elif module.params['state'] in power_options:
 
             if module.params['state'] == 'poweredon':
+
+                import q; q('present + poweredon')
 
                 if not os.path.isfile(vm['config']):
                     module.fail_json(msg="VMX does not exist, poweron will fail", meta=result)
@@ -178,32 +192,53 @@ def main():
 
         if module.params['state'] in create_options:
 
-            # Get template path
-            template = get_workstation_vm_by_name(module.params['template'])
-            template_vmxpath = template['config']
+            if module.params['template_src']:
 
-            # Create path for new vmx
-            vmxdir = os.path.dirname(template_vmxpath)
-            vmxdir = os.path.dirname(vmxdir)
-            vmxdir = os.path.join(vmxdir, module.params['name'])
-            if not os.path.isdir(vmxdir):
-                os.makedirs(vmxdir)
-            result['vmxdir'] = vmxdir
+                import q; q('template_src')
 
-            vmxpath = os.path.join(vmxdir, '%s.vmx' % module.params['name'])
-            result['vmxpath'] = vmxpath
+                # Get template path
+                template = get_workstation_vm_by_name(module.params['template'])
+                template_vmxpath = template['config']
 
-            # Clone it ...
-            (cmd, rc, so, se) = clone_vm(module.params['name'], vmxpath, template_vmxpath)
-            result['operations'].append(cmd)
-            result['rc'] = rc
-            result['so'] = so
-            result['se'] = se
+                # Create path for new vmx
+                vmxdir = os.path.dirname(template_vmxpath)
+                vmxdir = os.path.dirname(vmxdir)
+                vmxdir = os.path.join(vmxdir, module.params['name'])
+                if not os.path.isdir(vmxdir):
+                    os.makedirs(vmxdir)
+                result['vmxdir'] = vmxdir
 
-            time.sleep(5)
+                vmxpath = os.path.join(vmxdir, '%s.vmx' % module.params['name'])
+                result['vmxpath'] = vmxpath
 
-            if rc != 0 or not os.path.isfile(vmxpath):
-                module.fail_json(msg="Cloning the VM failed", meta=result)
+                # Clone it ...
+                (cmd, rc, so, se) = clone_vm(module.params['name'], vmxpath, template_vmxpath)
+                result['operations'].append(cmd)
+                result['rc'] = rc
+                result['so'] = so
+                result['se'] = se
+
+                time.sleep(5)
+
+                if rc != 0 or not os.path.isfile(vmxpath):
+                    module.fail_json(msg="Cloning the VM failed", meta=result)
+
+
+            elif module.params['ova']:
+
+                import q; q('ova')
+
+                (cmd, rc, so, se) = import_ova(module.params['ova'])
+                result['operations'].append(cmd)
+                result['rc_import'] = rc
+                result['so_import'] = so
+                result['se_import'] = se
+
+                time.sleep(5)
+
+                if rc != 0:
+                    module.fail_json(msg="Importing the OVA failed", meta=result)
+
 
             if module.params['state'] == 'poweredon':
                 (cmd, rc, so, se) = start_vm(vmxpath)
@@ -213,7 +248,6 @@ def main():
                 result['se_poweron'] = se
                 if rc != 0:
                     module.fail_json(msg="Powering on the VM failed", meta=result)
-
 
     if 'failed' not in result:
         result['failed'] = False
