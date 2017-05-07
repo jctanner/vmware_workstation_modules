@@ -202,7 +202,7 @@ def main():
 
             time.sleep(5)
 
-            if rc != 0 or not os.path.isdir(vmxpath):
+            if rc != 0 or not os.path.isfile(vmxpath):
                 module.fail_json(msg="Cloning the VM failed", meta=result)
 
             if module.params['state'] == 'poweredon':
