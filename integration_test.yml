@@ -1,0 +1,17 @@
+- hosts: localhost
+  connection: local
+  gather_facts: False
+  tasks:
+      - name: delete the guest
+        vmware_ws_guest:
+            name: testvm
+            state: absent
+        failed_when: False
+
+        #- fail: msg="debug"
+
+      - name: create the guest
+        vmware_ws_guest:
+            name: testvm
+            state: poweredon
+            template: centos-7
