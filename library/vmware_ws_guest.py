@@ -160,13 +160,15 @@ def main():
 
             vmxdir = vm['config']
             vmxdir = os.path.dirname(vmxdir)
-            shutil.rmtree(vmxdir)
+            if os.path.isdir(vmxdir):
+                shutil.rmtree(vmxdir)
 
             result['changed'] = True
 
         elif module.params['state'] == 'present':
 
-            pass
+            result['instances'] = []
+            result['instances'].append(vm)
 
         elif module.params['state'] in power_options:
 
@@ -184,6 +186,10 @@ def main():
                     module.fail_json(msg="Powering on the VM failed", meta=result)
 
                 result['changed'] = True
+
+            new_vm = get_workstation_vm_by_name(module.params['name'])
+            result['instances'] = []
+            result['instances'].append(new_vm)
 
         else:
             # This should not happen
@@ -251,6 +257,7 @@ def main():
                         module.fail_json(msg="Importing the OVA failed", meta=result)
 
             if module.params['state'] == 'poweredon':
+
                 (cmd, rc, so, se) = start_vm(vmxpath)
                 result['operations'].append(cmd)
                 result['rc_poweron'] = rc
@@ -258,6 +265,12 @@ def main():
                 result['se_poweron'] = se
                 if rc != 0:
                     module.fail_json(msg="Powering on the VM failed", meta=result)
+
+            time.sleep(60)
+
+            new_vm = get_workstation_vm_by_name(module.params['name'])
+            result['instances'] = []
+            result['instances'].append(new_vm)
 
     if 'failed' not in result:
         result['failed'] = False

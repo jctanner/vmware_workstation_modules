@@ -9,13 +9,24 @@ import shutil
 import subprocess
 
 
-def run_command(cmd, use_unsafe_shell=False):
-    p = subprocess.Popen(
-        cmd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        shell=use_unsafe_shell
-    )
+# http://stackoverflow.com/a/36187216
+def initchildproc():
+    os.setpgrp()
+    os.umask(022)
+
+
+def run_command(cmd, use_unsafe_shell=False, umask=False):
+
+    kwargs = {
+        'stdout': subprocess.PIPE,
+        'stderr': subprocess.PIPE,
+        'shell': use_unsafe_shell
+    }
+
+    if umask:
+        kwargs['preexec_fn'] = initchildproc
+
+    p = subprocess.Popen(cmd, **kwargs)
     (so, se) = p.communicate()
     return (p.returncode, so, se)
 
@@ -213,7 +224,7 @@ def get_ova_display_name(ovafile):
 def clone_vm(name, vmxpath, template_vmxpath):
     cmd = 'vmrun -T ws clone %s %s full -cloneName="%s"' % \
         (template_vmxpath, vmxpath, name)
-    (rc, so, se) = run_command(cmd, use_unsafe_shell=True)
+    (rc, so, se) = run_command(cmd, use_unsafe_shell=True, umask=True)
     return (cmd, rc, so, se)
 
 
@@ -244,8 +255,12 @@ def stop_vm(vmxpath):
 
 
 def start_vm(vmxpath):
+
+    # need to set umask 022 to make this work
+    # https://groups.google.com/forum/#!topic/vagrant-up/S3mpns57OAk
+
     cmd = 'vmrun start %s nogui' % vmxpath
-    (rc, so, se) = run_command(cmd, use_unsafe_shell=True)
+    (rc, so, se) = run_command(cmd, use_unsafe_shell=True, umask=True)
     return (cmd, rc, so, se)
 
 
