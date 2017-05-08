@@ -5,8 +5,8 @@
 import ast
 import json
 import os
+import shutil
 import subprocess
-from pprint import pprint
 
 
 def run_command(cmd, use_unsafe_shell=False):
@@ -59,7 +59,8 @@ def guestinfo(vmxpath):
     rdata = {
         'vmxfile': vmxpath,
         'ipaddress': None,
-        'tools_state': None
+        'tools_state': None,
+        'config': vmxpath
     }
 
     if not os.path.isfile(vmxpath):
@@ -178,13 +179,23 @@ def listvms(filter_unknown=True):
     return vms
 
 
-def get_workstation_vm_by_name(name):
-    vms = listvms(filter_unknown=True)
+def get_workstation_vm_by_name(name, filter_unknown=True):
+
+    vms = listvms(filter_unknown=filter_unknown)
     for k, v in vms.items():
         if v.get('DisplayName') == name or v.get('displayname') == name:
             return v
         else:
             pass
+
+    vmxpath = os.path.expanduser('~/vmware')
+    vmxpath = os.path.join(vmxpath, name, '%s.vmx' % name)
+    if os.path.isfile(vmxpath):
+        guest_info = guestinfo(vmxpath)
+        if guest_info:
+            guest_info['config'] = vmxpath
+            return guest_info
+
     return None
 
 
@@ -214,8 +225,15 @@ def import_ova(ovafile, vmware_dir='~/vmware'):
 
 
 def delete_vm(vmxpath):
+
+    vmxdir = os.path.dirname(vmxpath)
+
     cmd = 'vmrun deleteVm %s' % vmxpath
     (rc, so, se) = run_command(cmd, use_unsafe_shell=True)
+
+    if rc == 0 and os.path.isdir(vmxdir):
+        shutil.rmtree(vmxdir)
+
     return (cmd, rc, so, se)
 
 

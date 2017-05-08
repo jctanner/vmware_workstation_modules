@@ -2,6 +2,7 @@
   connection: local
   gather_facts: False
   tasks:
+
       - name: delete the guest(s)
         vmware_ws_guest:
             name: "{{ item }}"
@@ -12,7 +13,15 @@
             - testvm
         failed_when: False
 
-      #- fail: msg="debug"
+
+      - name: make sure all files are gone
+        shell: find ~/vmware -type d
+        changed_when: False
+        register: cleandir
+      - assert:
+          that:
+              - 'cleandir.stdout_lines|length == 1'
+
 
       - name: import the centos7 ova
         vmware_ws_guest:

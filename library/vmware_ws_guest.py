@@ -129,7 +129,10 @@ def main():
         'operations': []
     }
 
-    vm = get_workstation_vm_by_name(module.params['name'])
+    vm = get_workstation_vm_by_name(
+        module.params['name'],
+        filter_unknown=False
+    )
 
     if vm:
         # VM already exists
@@ -159,6 +162,8 @@ def main():
             vmxdir = os.path.dirname(vmxdir)
             shutil.rmtree(vmxdir)
 
+            result['changed'] = True
+
         elif module.params['state'] == 'present':
 
             pass
@@ -166,12 +171,6 @@ def main():
         elif module.params['state'] in power_options:
 
             if module.params['state'] == 'poweredon':
-
-                import q; q('present + poweredon')
-
-                for k,v in vm.items():
-                    import q; q(k)
-                    import q; q(v)
 
                 if not os.path.isfile(vm['config']):
                     module.fail_json(msg="VMX(%s) does not exist, poweron will fail" % vm['config'], meta=result)
@@ -183,6 +182,8 @@ def main():
                 result['se_poweron'] = se
                 if rc != 0:
                     module.fail_json(msg="Powering on the VM failed", meta=result)
+
+                result['changed'] = True
 
         else:
             # This should not happen
@@ -196,13 +197,18 @@ def main():
             if module.params['template_src']:
 
                 # Get template path
-                template = get_workstation_vm_by_name(module.params['template'])
+                template = get_workstation_vm_by_name(
+                    module.params['template_src'],
+                    filter_unknown=False
+                )
+                if not template:
+                    module.fail_json(msg='template %s was not found' % module.params['template_src'])
                 template_vmxpath = template['config']
 
                 # Create path for new vmx
-                vmxdir = os.path.dirname(template_vmxpath)
-                vmxdir = os.path.dirname(vmxdir)
+                vmxdir = os.path.expanduser('~/vmware')
                 vmxdir = os.path.join(vmxdir, module.params['name'])
+
                 if not os.path.isdir(vmxdir):
                     os.makedirs(vmxdir)
                 result['vmxdir'] = vmxdir
@@ -225,7 +231,10 @@ def main():
             elif module.params['ova']:
 
                 ova_name = get_ova_display_name(module.params['ova'])
-                ova_vm = get_workstation_vm_by_name(ova_name)
+                ova_vm = get_workstation_vm_by_name(
+                    ova_name,
+                    filter_unknown=False
+                )
 
                 if ova_vm:
                     result['changed'] = False
