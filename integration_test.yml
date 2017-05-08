@@ -12,6 +12,8 @@
             - testvm
         failed_when: False
 
+      #- fail: msg="debug"
+
       - name: import the centos7 ova
         vmware_ws_guest:
             name: centos-7_vmware_tools

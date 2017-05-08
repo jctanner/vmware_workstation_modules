@@ -164,37 +164,39 @@ def listvms(filter_unknown=True):
         if not vms[k].get('config'):
             vms[k]['config'] = k
 
-    '''
     # get rid of anything that is in a bad state
     if filter_unknown:
         to_remove = []
         for k, v in vms.items():
             config = v.get('config')
             if not config or not os.path.isfile(config):
-                if config is None:
-                    for k2,v2 in v.items():
-                        import q; q(k2)
-                        import q; q(v2)
                 to_remove.append(k)
         if to_remove:
             for tr in to_remove:
-                import q; q('remove2 %s' % tr)
                 vms.pop(tr, None)
-    '''
 
-    import q; q(vms.keys())
     return vms
 
 
 def get_workstation_vm_by_name(name):
     vms = listvms(filter_unknown=True)
-    import q; q(vms.keys())
     for k, v in vms.items():
         if v.get('DisplayName') == name or v.get('displayname') == name:
             return v
         else:
-            import q; q('%s != %s' % (v.get('DisplayName'), name))
+            pass
     return None
+
+
+def get_ova_display_name(ovafile):
+    name = None
+    cmd = 'ovftool %s' % ovafile
+    (rc, so, se) = run_command(cmd, use_unsafe_shell=True)
+    lines = so.split('\n')
+    for line in lines:
+        if line.startswith('Name: '):
+            name = line.split(None, 1)[-1].strip()
+    return name
 
 
 def clone_vm(name, vmxpath, template_vmxpath):

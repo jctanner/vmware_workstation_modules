@@ -78,6 +78,7 @@ from ansible.module_utils.six import iteritems
 
 from ansible.module_utils.vmware_workstation import clone_vm
 from ansible.module_utils.vmware_workstation import delete_vm
+from ansible.module_utils.vmware_workstation import get_ova_display_name
 from ansible.module_utils.vmware_workstation import get_workstation_vm_by_name
 from ansible.module_utils.vmware_workstation import import_ova
 from ansible.module_utils.vmware_workstation import start_vm
@@ -121,22 +122,19 @@ def main():
         supports_check_mode=True,
     )
 
+
     result = {
         'failed': False,
         'changed': False,
         'operations': []
     }
 
-    import q; q(module.params['name'])
     vm = get_workstation_vm_by_name(module.params['name'])
-    import q; q(vm)
 
     if vm:
         # VM already exists
 
         if module.params['state'] == 'absent':
-
-            import q; q('absent')
 
             # has to be poweredoff first
             (cmd, rc, so, se) = stop_vm(vm['config'])
@@ -163,7 +161,6 @@ def main():
 
         elif module.params['state'] == 'present':
 
-            import q; q('present')
             pass
 
         elif module.params['state'] in power_options:
@@ -172,8 +169,12 @@ def main():
 
                 import q; q('present + poweredon')
 
+                for k,v in vm.items():
+                    import q; q(k)
+                    import q; q(v)
+
                 if not os.path.isfile(vm['config']):
-                    module.fail_json(msg="VMX does not exist, poweron will fail", meta=result)
+                    module.fail_json(msg="VMX(%s) does not exist, poweron will fail" % vm['config'], meta=result)
 
                 (cmd, rc, so, se) = start_vm(vm['config'])
                 result['operations'].append(cmd)
@@ -193,8 +194,6 @@ def main():
         if module.params['state'] in create_options:
 
             if module.params['template_src']:
-
-                import q; q('template_src')
 
                 # Get template path
                 template = get_workstation_vm_by_name(module.params['template'])
@@ -223,22 +222,24 @@ def main():
                 if rc != 0 or not os.path.isfile(vmxpath):
                     module.fail_json(msg="Cloning the VM failed", meta=result)
 
-
             elif module.params['ova']:
 
-                import q; q('ova')
+                ova_name = get_ova_display_name(module.params['ova'])
+                ova_vm = get_workstation_vm_by_name(ova_name)
 
-                (cmd, rc, so, se) = import_ova(module.params['ova'])
-                result['operations'].append(cmd)
-                result['rc_import'] = rc
-                result['so_import'] = so
-                result['se_import'] = se
+                if ova_vm:
+                    result['changed'] = False
+                else:
+                    (cmd, rc, so, se) = import_ova(module.params['ova'])
+                    result['operations'].append(cmd)
+                    result['rc_import'] = rc
+                    result['so_import'] = so
+                    result['se_import'] = se
 
-                time.sleep(5)
+                    time.sleep(5)
 
-                if rc != 0:
-                    module.fail_json(msg="Importing the OVA failed", meta=result)
-
+                    if rc != 0:
+                        module.fail_json(msg="Importing the OVA failed", meta=result)
 
             if module.params['state'] == 'poweredon':
                 (cmd, rc, so, se) = start_vm(vmxpath)

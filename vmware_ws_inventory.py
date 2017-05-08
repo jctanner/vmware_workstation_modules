@@ -62,6 +62,9 @@ def guestinfo(vmxpath):
         'tools_state': None
     }
 
+    if not os.path.isfile(vmxpath):
+        return rdata
+
     with open(vmxpath, 'rb') as f:
         vmxdata = f.read()
 
