@@ -47,7 +47,7 @@
             hostname: testvm
             ansible_host: "{{ clone_result.instances[0].ipaddress }}"
             ansible_ssh_user: root
-            ansible_ssh_password: redhat
+            ansible_ssh_pass: redhat
 
 - hosts: testvm
   connection: ssh
