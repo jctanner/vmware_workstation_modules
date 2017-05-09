@@ -245,7 +245,7 @@ def main():
                 if ova_vm:
                     result['changed'] = False
                 else:
-                    (cmd, rc, so, se) = import_ova(module.params['ova'])
+                    (cmd, rc, so, se) = import_ova(module.params['ova'], accept_eula=True)
                     result['operations'].append(cmd)
                     result['rc_import'] = rc
                     result['so_import'] = so

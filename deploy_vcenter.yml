@@ -1,0 +1,22 @@
+- hosts: localhost
+  connection: local
+  gather_facts: False
+  vars:
+      vcenter:
+          ova: ~/Desktop/VMware-vCenter-Server-Appliance-6.5.0.5100-4602587_OVF10.ova
+          name: VMware-vCenter-Server-Appliance-6.5.0.5100-4602587_OVF10
+  tasks:
+
+      - name: delete the guest(s)
+        vmware_ws_guest:
+            name: "{{ vcenter.name }}"
+            state: absent
+        failed_when: False
+
+      - name: import the ova
+        vmware_ws_guest:
+            name: "{{ vcenter.name }}"
+            state: present
+            ova: "{{ vcenter.ova }}"
+
+
