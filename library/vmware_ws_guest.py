@@ -76,13 +76,7 @@ from ansible.module_utils.basic import AnsibleModule
 from ansible.module_utils.pycompat24 import get_exception
 from ansible.module_utils.six import iteritems
 
-from ansible.module_utils.vmware_workstation import clone_vm
-from ansible.module_utils.vmware_workstation import delete_vm
-from ansible.module_utils.vmware_workstation import get_ova_display_name
-from ansible.module_utils.vmware_workstation import get_workstation_vm_by_name
-from ansible.module_utils.vmware_workstation import import_ova
-from ansible.module_utils.vmware_workstation import start_vm
-from ansible.module_utils.vmware_workstation import stop_vm
+from ansible.module_utils.vmware_workstation import VMwareWorkstationHelper
 
 
 def main():
@@ -122,6 +116,7 @@ def main():
         supports_check_mode=True,
     )
 
+    vmwh = VMwareWorkstationHelper(module)
 
     result = {
         'failed': False,
@@ -129,7 +124,7 @@ def main():
         'operations': []
     }
 
-    vm = get_workstation_vm_by_name(
+    vm = vmwh.get_workstation_vm_by_name(
         module.params['name'],
         filter_unknown=False
     )
@@ -140,14 +135,14 @@ def main():
         if module.params['state'] == 'absent':
 
             # has to be poweredoff first
-            (cmd, rc, so, se) = stop_vm(vm['config'])
+            (cmd, rc, so, se) = vmwh.stop_vm(vm['config'])
             result['operations'].append(cmd)
             result['rc_stop'] = rc
             result['so_stop'] = so
             result['se_stop'] = se
 
             # destroy it
-            (cmd, rc, so, se) = delete_vm(vm['config'])
+            (cmd, rc, so, se) = vmwh.delete_vm(vm['config'])
             result['operations'].append(cmd)
 
             result['rc_delete'] = rc
@@ -177,7 +172,7 @@ def main():
                 if not os.path.isfile(vm['config']):
                     module.fail_json(msg="VMX(%s) does not exist, poweron will fail" % vm['config'], meta=result)
 
-                (cmd, rc, so, se) = start_vm(vm['config'])
+                (cmd, rc, so, se) = vmwh.start_vm(vm['config'])
                 result['operations'].append(cmd)
                 result['rc_poweron'] = rc
                 result['so_poweron'] = so
@@ -187,7 +182,7 @@ def main():
 
                 result['changed'] = True
 
-            new_vm = get_workstation_vm_by_name(module.params['name'])
+            new_vm = vmwh.get_workstation_vm_by_name(module.params['name'])
             result['instances'] = []
             result['instances'].append(new_vm)
 
@@ -203,7 +198,7 @@ def main():
             if module.params['template_src']:
 
                 # Get template path
-                template = get_workstation_vm_by_name(
+                template = vmwh.get_workstation_vm_by_name(
                     module.params['template_src'],
                     filter_unknown=False
                 )
@@ -223,7 +218,7 @@ def main():
                 result['vmxpath'] = vmxpath
 
                 # Clone it ...
-                (cmd, rc, so, se) = clone_vm(module.params['name'], vmxpath, template_vmxpath)
+                (cmd, rc, so, se) = vmwh.clone_vm(module.params['name'], vmxpath, template_vmxpath)
                 result['operations'].append(cmd)
                 result['rc'] = rc
                 result['so'] = so
@@ -236,8 +231,8 @@ def main():
 
             elif module.params['ova']:
 
-                ova_name = get_ova_display_name(module.params['ova'])
-                ova_vm = get_workstation_vm_by_name(
+                ova_name = vmwh.get_ova_display_name(module.params['ova'])
+                ova_vm = vmwh.get_workstation_vm_by_name(
                     ova_name,
                     filter_unknown=False
                 )
@@ -245,7 +240,7 @@ def main():
                 if ova_vm:
                     result['changed'] = False
                 else:
-                    (cmd, rc, so, se) = import_ova(module.params['ova'], accept_eula=True)
+                    (cmd, rc, so, se) = vmwh.import_ova(module.params['ova'], accept_eula=True)
                     result['operations'].append(cmd)
                     result['rc_import'] = rc
                     result['so_import'] = so
@@ -258,7 +253,7 @@ def main():
 
             if module.params['state'] == 'poweredon':
 
-                (cmd, rc, so, se) = start_vm(vmxpath)
+                (cmd, rc, so, se) = vmwh.start_vm(vmxpath)
                 result['operations'].append(cmd)
                 result['rc_poweron'] = rc
                 result['so_poweron'] = so
@@ -268,7 +263,7 @@ def main():
 
             time.sleep(60)
 
-            new_vm = get_workstation_vm_by_name(module.params['name'])
+            new_vm = vmwh.get_workstation_vm_by_name(module.params['name'])
             result['instances'] = []
             result['instances'].append(new_vm)
 
@@ -279,6 +274,7 @@ def main():
         module.fail_json(**result)
     else:
         module.exit_json(**result)
+
 
 if __name__ == '__main__':
     main()

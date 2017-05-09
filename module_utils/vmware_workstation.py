@@ -3,14 +3,13 @@
 # https://www.vmware.com/support/developer/vix-api/vix112_vmrun_command.pdf
 
 import ast
-import json
 import os
 import shutil
 import subprocess
 
 
-# http://stackoverflow.com/a/36187216
 def initchildproc():
+    # http://stackoverflow.com/a/36187216
     os.setpgrp()
     os.umask(022)
 
@@ -31,254 +30,255 @@ def run_command(cmd, use_unsafe_shell=False, umask=False):
     return (p.returncode, so, se)
 
 
-def clean_ini_data(data):
+class VMwareWorkstationHelper(object):
 
-    rdata = {}
+    def __init__(self, module):
+        self.module = module
+        self.log = []
+        self.result = {
+            'failed': False,
+            'changed': False
+        }
 
-    # cleanup
-    data = data.replace('"', '')
-    data = data.replace('TRUE', 'True')
-    data = data.replace('true', 'True')
-    data = data.replace('FALSE', 'False')
-    data = data.replace('false', 'False')
+    @staticmethod
+    def clean_ini_data(data):
 
-    entries = data.split('\n')
-    entries = [x.strip() for x in entries]
-    entries = [x for x in entries if not x.startswith('#')]
-    for entry in entries:
-        parts = entry.split('=', 1)
-        parts = [x.strip() for x in parts if x.strip()]
-        if len(parts) > 1:
+        rdata = {}
 
-            key = parts[0]
-            val = parts[1]
+        # cleanup
+        data = data.replace('"', '')
+        data = data.replace('TRUE', 'True')
+        data = data.replace('true', 'True')
+        data = data.replace('FALSE', 'False')
+        data = data.replace('false', 'False')
 
-            # make ints/floats/bools
-            try:
-                val = ast.literal_eval(val)
-            except:
-                pass
+        entries = data.split('\n')
+        entries = [x.strip() for x in entries]
+        entries = [x for x in entries if not x.startswith('#')]
+        for entry in entries:
+            parts = entry.split('=', 1)
+            parts = [x.strip() for x in parts if x.strip()]
+            if len(parts) > 1:
 
-            rdata[key] = val
+                key = parts[0]
+                val = parts[1]
 
-    return rdata
+                # make ints/floats/bools
+                try:
+                    val = ast.literal_eval(val)
+                except:
+                    pass
 
+                rdata[key] = val
 
-def guestinfo(vmxpath):
-    '''Use the vmx and vmrun to get metadata about the guest'''
-
-    rdata = {
-        'vmxfile': vmxpath,
-        'ipaddress': None,
-        'tools_state': None,
-        'config': vmxpath
-    }
-
-    if not os.path.isfile(vmxpath):
         return rdata
 
-    with open(vmxpath, 'rb') as f:
-        vmxdata = f.read()
+    @staticmethod
+    def guestinfo(vmxpath):
+        '''Use the vmx and vmrun to get metadata about the guest'''
 
-    entries = clean_ini_data(vmxdata)
-    for k,v in entries.items():
-        rdata[k] = v
+        rdata = {
+            'vmxfile': vmxpath,
+            'ipaddress': None,
+            'tools_state': None,
+            'config': vmxpath
+        }
 
-    # vmrun checkToolsState
-    cmd = 'vmrun checkToolsState %s' % vmxpath
-    (rc, so, se) = run_command(cmd, use_unsafe_shell=True)
-    if rc == 0:
-        rdata['toolsstate'] = so.strip()
+        if not os.path.isfile(vmxpath):
+            return rdata
 
-    # vmrun getGuestIPAddress
-    cmd = 'vmrun getGuestIPAddress %s' % vmxpath
-    (rc, so, se) = run_command(cmd, use_unsafe_shell=True)
+        with open(vmxpath, 'rb') as f:
+            vmxdata = f.read()
 
-    if rc != 0 or 'tools are not running' in so.lower():
-        if rdata['tools_state'] is None:
-            rdata['tools_state'] = 'not running'
-    else:
-        rdata['ipaddress'] = so.strip()
-        if rdata['tools_state'] is None:
-            rdata['tools_state'] = 'running'
+        entries = VMwareWorkstationHelper.clean_ini_data(vmxdata)
+        for k,v in entries.items():
+            rdata[k] = v
 
-    return rdata
+        # vmrun checkToolsState
+        cmd = 'vmrun checkToolsState %s' % vmxpath
+        (rc, so, se) = run_command(cmd, use_unsafe_shell=True)
+        if rc == 0:
+            rdata['toolsstate'] = so.strip()
 
+        # vmrun getGuestIPAddress
+        cmd = 'vmrun getGuestIPAddress %s' % vmxpath
+        (rc, so, se) = run_command(cmd, use_unsafe_shell=True)
 
-def parse_inventory_file():
+        if rc != 0 or 'tools are not running' in so.lower():
+            if rdata['tools_state'] is None:
+                rdata['tools_state'] = 'not running'
+        else:
+            rdata['ipaddress'] = so.strip()
+            if rdata['tools_state'] is None:
+                rdata['tools_state'] = 'running'
 
-    _vms = {}
+        return rdata
 
-    # cat ~/.vmware/inventory.vmls
-    inventory_file = '~/.vmware/inventory.vmls'
-    inventory_file = os.path.expanduser(inventory_file)
+    @staticmethod
+    def parse_inventory_file():
 
-    with open(inventory_file, 'rb') as f:
-        data = f.read()
-    entries = clean_ini_data(data)
+        _vms = {}
 
-    for k, v in entries.items():
-        if k.startswith('vmlist'):
-            key = k.replace('vmlist', '')
-            key_parts = key.split('.')
-            number = key_parts[0]
-            section = key_parts[1]
+        # cat ~/.vmware/inventory.vmls
+        inventory_file = '~/.vmware/inventory.vmls'
+        inventory_file = os.path.expanduser(inventory_file)
 
-            if number not in _vms:
-                _vms[number] = {}
+        with open(inventory_file, 'rb') as f:
+            data = f.read()
+        entries = VMwareWorkstationHelper.clean_ini_data(data)
 
-            _vms[number][section] = v
+        for k, v in entries.items():
+            if k.startswith('vmlist'):
+                key = k.replace('vmlist', '')
+                key_parts = key.split('.')
+                number = key_parts[0]
+                section = key_parts[1]
 
-    vms = {}
-    for k, v in _vms.items():
-        vms[v['config']] = v.copy()
+                if number not in _vms:
+                    _vms[number] = {}
 
-    return vms
+                _vms[number][section] = v
 
+        vms = {}
+        for k, v in _vms.items():
+            vms[v['config']] = v.copy()
 
-def listvms(filter_unknown=True):
+        return vms
 
-    vms = parse_inventory_file()
+    @staticmethod
+    def listvms(filter_unknown=True):
 
-    cmd = 'vmrun list'
-    (rc, so, se) = run_command(cmd, use_unsafe_shell=True)
-    vmxpaths = so.split('\n')
-    vmxpaths = [x.strip() for x in vmxpaths if x.strip()]
-    vmxpaths = [x for x in vmxpaths if not x.startswith('Total running')]
-    for vmxpath in vmxpaths:
-        if vmxpath not in vms:
-            vms[vmxpath] = {}
+        vms = VMwareWorkstationHelper.parse_inventory_file()
 
-    # make a list of basedirs for known VMs
-    vmxparents = []
-    for k, v in vms.items():
-        config = v.get('config')
-        if config:
-            parent = os.path.dirname(config)
-            parent = os.path.dirname(parent)
-            if parent not in vmxparents:
-                vmxparents.append(parent)
+        cmd = 'vmrun list'
+        (rc, so, se) = run_command(cmd, use_unsafe_shell=True)
+        vmxpaths = so.split('\n')
+        vmxpaths = [x.strip() for x in vmxpaths if x.strip()]
+        vmxpaths = [x for x in vmxpaths if not x.startswith('Total running')]
+        for vmxpath in vmxpaths:
+            if vmxpath not in vms:
+                vms[vmxpath] = {}
 
-    # find any vms not listed by the commands
-    for vmxp in vmxparents:
-        for root, dirs, files in os.walk(vmxp):
-            vmxfiles = [x for x in files if x.endswith('.vmx')]
-            if vmxfiles:
-                vmxpath = os.path.join(root, vmxfiles[0])
-                if vmxpath not in vms:
-                    vms[vmxpath] = {}
-
-    for k, v in vms.items():
-        # fetch data from the vmx
-        guest_info = guestinfo(k)
-        for k2, v2 in guest_info.items():
-            vms[k][k2] = v2
-        if not vms[k].get('config'):
-            vms[k]['config'] = k
-
-    # get rid of anything that is in a bad state
-    if filter_unknown:
-        to_remove = []
+        # make a list of basedirs for known VMs
+        vmxparents = []
         for k, v in vms.items():
             config = v.get('config')
-            if not config or not os.path.isfile(config):
-                to_remove.append(k)
-        if to_remove:
-            for tr in to_remove:
-                vms.pop(tr, None)
+            if config:
+                parent = os.path.dirname(config)
+                parent = os.path.dirname(parent)
+                if parent not in vmxparents:
+                    vmxparents.append(parent)
 
-    return vms
+        # find any vms not listed by the commands
+        for vmxp in vmxparents:
+            for root, dirs, files in os.walk(vmxp):
+                vmxfiles = [x for x in files if x.endswith('.vmx')]
+                if vmxfiles:
+                    vmxpath = os.path.join(root, vmxfiles[0])
+                    if vmxpath not in vms:
+                        vms[vmxpath] = {}
 
+        for k, v in vms.items():
+            # fetch data from the vmx
+            guest_info = VMwareWorkstationHelper.guestinfo(k)
+            for k2, v2 in guest_info.items():
+                vms[k][k2] = v2
+            if not vms[k].get('config'):
+                vms[k]['config'] = k
 
-def get_workstation_vm_by_name(name, filter_unknown=True):
+        # get rid of anything that is in a bad state
+        if filter_unknown:
+            to_remove = []
+            for k, v in vms.items():
+                config = v.get('config')
+                if not config or not os.path.isfile(config):
+                    to_remove.append(k)
+            if to_remove:
+                for tr in to_remove:
+                    vms.pop(tr, None)
 
-    vms = listvms(filter_unknown=filter_unknown)
-    for k, v in vms.items():
-        if v.get('DisplayName') == name or v.get('displayname') == name:
-            return v
-        else:
-            pass
+        return vms
 
-    vmxpath = os.path.expanduser('~/vmware')
-    vmxpath = os.path.join(vmxpath, name, '%s.vmx' % name)
-    if os.path.isfile(vmxpath):
-        guest_info = guestinfo(vmxpath)
-        if guest_info:
-            guest_info['config'] = vmxpath
-            return guest_info
+    @staticmethod
+    def get_workstation_vm_by_name(name, filter_unknown=True):
 
-    return None
+        vms = VMwareWorkstationHelper.listvms(filter_unknown=filter_unknown)
+        for k, v in vms.items():
+            if v.get('DisplayName') == name or v.get('displayname') == name:
+                return v
+            else:
+                pass
 
+        vmxpath = os.path.expanduser('~/vmware')
+        vmxpath = os.path.join(vmxpath, name, '%s.vmx' % name)
+        if os.path.isfile(vmxpath):
+            guest_info = VMwareWorkstationHelper.guestinfo(vmxpath)
+            if guest_info:
+                guest_info['config'] = vmxpath
+                return guest_info
 
-def get_ova_display_name(ovafile):
-    name = None
-    cmd = 'ovftool %s' % ovafile
-    (rc, so, se) = run_command(cmd, use_unsafe_shell=True)
-    lines = so.split('\n')
-    for line in lines:
-        if line.startswith('Name: '):
-            name = line.split(None, 1)[-1].strip()
-    return name
+        return None
 
+    @staticmethod
+    def get_ova_display_name(ovafile):
+        name = None
+        cmd = 'ovftool %s' % ovafile
+        (rc, so, se) = run_command(cmd, use_unsafe_shell=True)
+        lines = so.split('\n')
+        for line in lines:
+            if line.startswith('Name: '):
+                name = line.split(None, 1)[-1].strip()
+        return name
 
-def clone_vm(name, vmxpath, template_vmxpath):
-    cmd = 'vmrun -T ws clone %s %s full -cloneName="%s"' % \
-        (template_vmxpath, vmxpath, name)
-    (rc, so, se) = run_command(cmd, use_unsafe_shell=True, umask=True)
-    return (cmd, rc, so, se)
+    @staticmethod
+    def clone_vm(name, vmxpath, template_vmxpath):
+        cmd = 'vmrun -T ws clone %s %s full -cloneName="%s"' % \
+            (template_vmxpath, vmxpath, name)
+        (rc, so, se) = run_command(cmd, use_unsafe_shell=True, umask=True)
+        return (cmd, rc, so, se)
 
+    @staticmethod
+    def import_ova(ovafile, vmware_dir='~/vmware', accept_eula=False):
+        # --hideEula
 
-def import_ova(ovafile, vmware_dir='~/vmware', accept_eula=False):
-    # --hideEula
+        ovafile = os.path.expanduser(ovafile)
+        vmware_dir = os.path.expanduser(vmware_dir)
 
-    ovafile = os.path.expanduser(ovafile)
-    vmware_dir = os.path.expanduser(vmware_dir)
+        cmd = ['ovftool']
+        if accept_eula:
+            cmd.append('--acceptAllEulas')
+        cmd.append(ovafile)
+        cmd.append(vmware_dir)
+        cmd = ' '.join(cmd)
 
-    cmd = ['ovftool']
-    if accept_eula:
-        cmd.append('--acceptAllEulas')
-    cmd.append(ovafile)
-    cmd.append(vmware_dir)
-    cmd = ' '.join(cmd)
+        (rc, so, se) = run_command(cmd, use_unsafe_shell=True)
+        return (cmd, rc, so, se)
 
-    (rc, so, se) = run_command(cmd, use_unsafe_shell=True)
-    return (cmd, rc, so, se)
+    @staticmethod
+    def delete_vm(vmxpath):
 
+        vmxdir = os.path.dirname(vmxpath)
 
-def delete_vm(vmxpath):
+        cmd = 'vmrun deleteVm %s' % vmxpath
+        (rc, so, se) = run_command(cmd, use_unsafe_shell=True)
 
-    vmxdir = os.path.dirname(vmxpath)
+        if rc == 0 and os.path.isdir(vmxdir):
+            shutil.rmtree(vmxdir)
 
-    cmd = 'vmrun deleteVm %s' % vmxpath
-    (rc, so, se) = run_command(cmd, use_unsafe_shell=True)
+        return (cmd, rc, so, se)
 
-    if rc == 0 and os.path.isdir(vmxdir):
-        shutil.rmtree(vmxdir)
+    @staticmethod
+    def stop_vm(vmxpath):
+        cmd = 'vmrun stop %s' % vmxpath
+        (rc, so, se) = run_command(cmd, use_unsafe_shell=True)
+        return (cmd, rc, so, se)
 
-    return (cmd, rc, so, se)
+    @staticmethod
+    def start_vm(vmxpath):
 
+        # need to set umask 022 to make this work
+        # https://groups.google.com/forum/#!topic/vagrant-up/S3mpns57OAk
 
-def stop_vm(vmxpath):
-    cmd = 'vmrun stop %s' % vmxpath
-    (rc, so, se) = run_command(cmd, use_unsafe_shell=True)
-    return (cmd, rc, so, se)
-
-
-def start_vm(vmxpath):
-
-    # need to set umask 022 to make this work
-    # https://groups.google.com/forum/#!topic/vagrant-up/S3mpns57OAk
-
-    cmd = 'vmrun start %s nogui' % vmxpath
-    (rc, so, se) = run_command(cmd, use_unsafe_shell=True, umask=True)
-    return (cmd, rc, so, se)
-
-
-def main():
-
-    vms = listvms()
-    print(json.dumps(vms, indent=2, sort_keys=True))
-
-
-if __name__ == "__main__":
-    main()
+        cmd = 'vmrun start %s nogui' % vmxpath
+        (rc, so, se) = run_command(cmd, use_unsafe_shell=True, umask=True)
+        return (cmd, rc, so, se)
