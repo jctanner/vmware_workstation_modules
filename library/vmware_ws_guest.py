@@ -159,6 +159,11 @@ def main():
 
                 vmwh.start_vm(vm['config'])
 
+                new_vm = vmwh.get_workstation_vm_by_name(module.params['name'])
+                while not new_vm['ipaddress']:
+                    time.sleep(10)
+                    new_vm = vmwh.get_workstation_vm_by_name(module.params['name'])
+
             new_vm = vmwh.get_workstation_vm_by_name(module.params['name'])
             vmwh.result['instances'] = []
             vmwh.result['instances'].append(new_vm)

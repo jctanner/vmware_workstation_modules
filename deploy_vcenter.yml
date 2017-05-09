@@ -1,3 +1,5 @@
+# http://www.virtuallyghetto.com/2016/10/how-to-deploy-the-vcenter-server-appliance-vcsa-6-5-running-on-vmware-fusion-workstation.html
+
 - hosts: localhost
   connection: local
   gather_facts: False
@@ -5,9 +7,47 @@
       vcenter:
           ova: ~/Desktop/VMware-vCenter-Server-Appliance-6.5.0.5100-4602587_OVF10.ova
           name: VMware-vCenter-Server-Appliance-6.5.0.5100-4602587_OVF10
+          vmx: ~/vmware/VMware-vCenter-Server-Appliance-6.5.0.5100-4602587_OVF10/VMware-vCenter-Server-Appliance-6.5.0.5100-4602587_OVF10.vmx
+          vmx_entries:
+              - name: ethernet0.connectionType
+                value: nat
+                regexp: ^ethernet0.connectionType
+              - name: guestinfo.cis.deployment.node.type
+                value: embedded
+              - name: guestinfo.cis.appliance.net.addr.family
+                value: ipv4
+              - name: guestinfo.cis.appliance.net.mode
+                value: static
+              - name: guestinfo.cis.appliance.net.pnid
+                value: 192.168.49.132
+              - name: guestinfo.cis.appliance.net.addr
+                value: 192.168.49.132
+              - name: guestinfo.cis.appliance.net.prefix
+                value: 24
+              - name: guestinfo.cis.appliance.net.gateway
+                value: 192.168.49.2
+              - name: guestinfo.cis.appliance.net.dns.servers
+                value: 192.168.49.2
+              - name: guestinfo.cis.appliance.root.passwd
+                value: VMware1!
+              - name: guestinfo.cis.appliance.ssh.enabled
+                value: True
+              - name: guestinfo.cis.deployment.autoconfig
+                value: True
+              - name: guestinfo.cis.appliance.ntp.servers
+                value: pool.ntp.org
+              - name: guestinfo.cis.vmdir.password
+                value: VMware1!
+              - name: guestinfo.cis.vmdir.site-name
+                value: virtuallyGhetto
+              - name: guestinfo.cis.vmdir.domain-name
+                value: vsphere.local
+              - name: guestinfo.cis.ceip_enabled
+                value: False
+
   tasks:
 
-      - name: delete the guest(s)
+      - name: delete the existing appliance
         vmware_ws_guest:
             name: "{{ vcenter.name }}"
             state: absent
@@ -18,5 +58,21 @@
             name: "{{ vcenter.name }}"
             state: present
             ova: "{{ vcenter.ova }}"
+
+      - name: add the bootstrap settings to the vmx
+        lineinfile:
+            path: "{{ vcenter.vmx }}"
+            state: present
+            line: "{{ item['name'] + ' = ' + '\"' + item['value']|string + '\"' }}"
+            regexp: "{{ item['regexp']|default(omit) }}"
+        with_items: "{{ vcenter.vmx_entries }}"
+
+      - name: start the appliance
+        vmware_ws_guest:
+            name: "{{ vcenter.name }}"
+            state: poweredon
+        register: poweron
+
+      - debug: var=poweron
 
 
