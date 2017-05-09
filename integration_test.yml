@@ -41,6 +41,7 @@
         assert:
             that:
                 - 'clone_result.instances[0].ipaddress is defined'
+                - 'clone_result.instances[0].ipaddress != None'
 
       - name: add the new vm
         add_host:

@@ -34,11 +34,24 @@ class VMwareWorkstationHelper(object):
 
     def __init__(self, module):
         self.module = module
+        self.vmware_dir = os.path.expanduser('~/vmware')
         self.log = []
         self.result = {
             'failed': False,
-            'changed': False
+            'changed': False,
+            'log': []
         }
+
+    def run_command_with_log(self, cmd):
+        self.result['log'].append(cmd)
+        (rc, so, se) = run_command(cmd, use_unsafe_shell=True, umask=True)
+        self.result['log'].append(rc)
+        self.result['log'].append(so)
+        self.result['log'].append(se)
+        return (rc, so, se)
+
+    def fail(self, msg=None):
+        self.module.fail_json(msg=msg, meta=self.log)
 
     @staticmethod
     def clean_ini_data(data):
@@ -230,55 +243,95 @@ class VMwareWorkstationHelper(object):
                 name = line.split(None, 1)[-1].strip()
         return name
 
-    @staticmethod
-    def clone_vm(name, vmxpath, template_vmxpath):
+    def clone_vm(self, name, template):
+
+        vmxdir = os.path.expanduser('~/vmware')
+        vmxdir = os.path.join(vmxdir, name)
+        self.result['vmxdir'] = vmxdir
+        vmxpath = os.path.join(vmxdir, '%s.vmx' % name)
+        self.result['vmxpath'] = vmxdir
+
+        template_vm = VMwareWorkstationHelper.get_workstation_vm_by_name(
+            template,
+            filter_unknown=False
+        )
+
+        if not template_vm:
+            self.fail(msg='%s template not found' % template)
+
+        template_vmxpath = template_vm['config']
+
+        if not os.path.isdir(vmxdir):
+            os.makedirs(vmxdir)
+
         cmd = 'vmrun -T ws clone %s %s full -cloneName="%s"' % \
             (template_vmxpath, vmxpath, name)
-        (rc, so, se) = run_command(cmd, use_unsafe_shell=True, umask=True)
-        return (cmd, rc, so, se)
+        (rc, so, se) = self.run_command_with_log(cmd)
 
-    @staticmethod
-    def import_ova(ovafile, vmware_dir='~/vmware', accept_eula=False):
-        # --hideEula
+        if rc == 0:
+            return True
+        else:
+            self.fail(msg='Cloning %s to %s failed' % (template_vmxpath, vmxpath))
+
+    def import_ova(self, ovafile, accept_eula=False):
 
         ovafile = os.path.expanduser(ovafile)
-        vmware_dir = os.path.expanduser(vmware_dir)
 
         cmd = ['ovftool']
         if accept_eula:
             cmd.append('--acceptAllEulas')
         cmd.append(ovafile)
-        cmd.append(vmware_dir)
+        cmd.append(self.vmware_dir)
         cmd = ' '.join(cmd)
-
+        self.log.append(cmd)
         (rc, so, se) = run_command(cmd, use_unsafe_shell=True)
-        return (cmd, rc, so, se)
+        self.log.append(rc)
+        self.log.append(so)
+        self.log.append(se)
 
-    @staticmethod
-    def delete_vm(vmxpath):
+        if rc == 0:
+            return True
+        else:
+            self.fail(msg='Importing %s failed' % (ovafile))
+
+
+    def delete_vm(self, vmxpath):
+
+        self.result['changed'] = True
 
         vmxdir = os.path.dirname(vmxpath)
-
         cmd = 'vmrun deleteVm %s' % vmxpath
-        (rc, so, se) = run_command(cmd, use_unsafe_shell=True)
+        (rc, so, se) = self.run_command_with_log(cmd)
 
         if rc == 0 and os.path.isdir(vmxdir):
             shutil.rmtree(vmxdir)
+            return True
+        else:
+            self.fail(msg='Destroying %s failed' % vmxpath)
 
-        return (cmd, rc, so, se)
+    def stop_vm(self, vmxpath):
 
-    @staticmethod
-    def stop_vm(vmxpath):
+        self.result['changed'] = True
+
         cmd = 'vmrun stop %s' % vmxpath
-        (rc, so, se) = run_command(cmd, use_unsafe_shell=True)
-        return (cmd, rc, so, se)
+        (rc, so, se) = self.run_command_with_log(cmd)
 
-    @staticmethod
-    def start_vm(vmxpath):
+        if rc == 0:
+            return True
+        else:
+            return False
+
+    def start_vm(self, vmxpath):
 
         # need to set umask 022 to make this work
         # https://groups.google.com/forum/#!topic/vagrant-up/S3mpns57OAk
 
+        self.result['changed'] = True
+
         cmd = 'vmrun start %s nogui' % vmxpath
-        (rc, so, se) = run_command(cmd, use_unsafe_shell=True, umask=True)
-        return (cmd, rc, so, se)
+        (rc, so, se) = self.run_command_with_log(cmd)
+
+        if rc == 0:
+            return True
+        else:
+            self.fail(msg='Stopping %s failed' % vmxpath)

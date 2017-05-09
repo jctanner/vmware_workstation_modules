@@ -75,7 +75,6 @@ import time
 from ansible.module_utils.basic import AnsibleModule
 from ansible.module_utils.pycompat24 import get_exception
 from ansible.module_utils.six import iteritems
-
 from ansible.module_utils.vmware_workstation import VMwareWorkstationHelper
 
 
@@ -135,22 +134,10 @@ def main():
         if module.params['state'] == 'absent':
 
             # has to be poweredoff first
-            (cmd, rc, so, se) = vmwh.stop_vm(vm['config'])
-            result['operations'].append(cmd)
-            result['rc_stop'] = rc
-            result['so_stop'] = so
-            result['se_stop'] = se
+            vmwh.stop_vm(vm['config'])
 
             # destroy it
-            (cmd, rc, so, se) = vmwh.delete_vm(vm['config'])
-            result['operations'].append(cmd)
-
-            result['rc_delete'] = rc
-            result['so_delete'] = so
-            result['se_delete'] = se
-            if rc != 0:
-                module.fail_json(msg="Destroying the VM failed", meta=result)
-
+            vmwh.delete_vm(vm['config'])
             time.sleep(5)
 
             vmxdir = vm['config']
@@ -158,12 +145,10 @@ def main():
             if os.path.isdir(vmxdir):
                 shutil.rmtree(vmxdir)
 
-            result['changed'] = True
-
         elif module.params['state'] == 'present':
 
-            result['instances'] = []
-            result['instances'].append(vm)
+            vmwh.result['instances'] = []
+            vmwh.result['instances'].append(vm)
 
         elif module.params['state'] in power_options:
 
@@ -172,19 +157,11 @@ def main():
                 if not os.path.isfile(vm['config']):
                     module.fail_json(msg="VMX(%s) does not exist, poweron will fail" % vm['config'], meta=result)
 
-                (cmd, rc, so, se) = vmwh.start_vm(vm['config'])
-                result['operations'].append(cmd)
-                result['rc_poweron'] = rc
-                result['so_poweron'] = so
-                result['se_poweron'] = se
-                if rc != 0:
-                    module.fail_json(msg="Powering on the VM failed", meta=result)
-
-                result['changed'] = True
+                vmwh.start_vm(vm['config'])
 
             new_vm = vmwh.get_workstation_vm_by_name(module.params['name'])
-            result['instances'] = []
-            result['instances'].append(new_vm)
+            vmwh.result['instances'] = []
+            vmwh.result['instances'].append(new_vm)
 
         else:
             # This should not happen
@@ -195,85 +172,44 @@ def main():
 
         if module.params['state'] in create_options:
 
+            new_vm = None
+
             if module.params['template_src']:
 
-                # Get template path
-                template = vmwh.get_workstation_vm_by_name(
-                    module.params['template_src'],
-                    filter_unknown=False
-                )
-                if not template:
-                    module.fail_json(msg='template %s was not found' % module.params['template_src'])
-                template_vmxpath = template['config']
-
-                # Create path for new vmx
-                vmxdir = os.path.expanduser('~/vmware')
-                vmxdir = os.path.join(vmxdir, module.params['name'])
-
-                if not os.path.isdir(vmxdir):
-                    os.makedirs(vmxdir)
-                result['vmxdir'] = vmxdir
-
-                vmxpath = os.path.join(vmxdir, '%s.vmx' % module.params['name'])
-                result['vmxpath'] = vmxpath
-
                 # Clone it ...
-                (cmd, rc, so, se) = vmwh.clone_vm(module.params['name'], vmxpath, template_vmxpath)
-                result['operations'].append(cmd)
-                result['rc'] = rc
-                result['so'] = so
-                result['se'] = se
-
-                time.sleep(5)
-
-                if rc != 0 or not os.path.isfile(vmxpath):
-                    module.fail_json(msg="Cloning the VM failed", meta=result)
+                vmwh.clone_vm(module.params['name'], module.params['template'])
+                new_vm = vmwh.get_workstation_vm_by_name(module.params['name'])
 
             elif module.params['ova']:
 
+                # Import it ...
                 ova_name = vmwh.get_ova_display_name(module.params['ova'])
                 ova_vm = vmwh.get_workstation_vm_by_name(
                     ova_name,
                     filter_unknown=False
                 )
 
-                if ova_vm:
-                    result['changed'] = False
-                else:
-                    (cmd, rc, so, se) = vmwh.import_ova(module.params['ova'], accept_eula=True)
-                    result['operations'].append(cmd)
-                    result['rc_import'] = rc
-                    result['so_import'] = so
-                    result['se_import'] = se
-
+                if not ova_vm:
+                    ova_vm = vmwh.import_ova(module.params['ova'], accept_eula=True)
                     time.sleep(5)
 
-                    if rc != 0:
-                        module.fail_json(msg="Importing the OVA failed", meta=result)
+                new_vm = ova_vm
 
             if module.params['state'] == 'poweredon':
 
-                (cmd, rc, so, se) = vmwh.start_vm(vmxpath)
-                result['operations'].append(cmd)
-                result['rc_poweron'] = rc
-                result['so_poweron'] = so
-                result['se_poweron'] = se
-                if rc != 0:
-                    module.fail_json(msg="Powering on the VM failed", meta=result)
+                vmwh.start_vm(new_vm['config'])
 
-            time.sleep(60)
+                while not new_vm['ipaddress']:
+                    time.sleep(10)
+                    new_vm = vmwh.get_workstation_vm_by_name(module.params['name'])
 
-            new_vm = vmwh.get_workstation_vm_by_name(module.params['name'])
-            result['instances'] = []
-            result['instances'].append(new_vm)
+            vmwh.result['instances'] = []
+            vmwh.result['instances'].append(new_vm)
 
-    if 'failed' not in result:
-        result['failed'] = False
-
-    if result['failed']:
-        module.fail_json(**result)
+    if vmwh.result['failed']:
+        module.fail_json(**vmwh.result)
     else:
-        module.exit_json(**result)
+        module.exit_json(**vmwh.result)
 
 
 if __name__ == '__main__':
