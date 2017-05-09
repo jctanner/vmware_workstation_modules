@@ -228,9 +228,17 @@ def clone_vm(name, vmxpath, template_vmxpath):
     return (cmd, rc, so, se)
 
 
-def import_ova(ovafile, vmware_dir='~/vmware'):
+def import_ova(ovafile, vmware_dir='~/vmware', accept_eula=False):
+    # --hideEula
+
     vmware_dir = os.path.expanduser(vmware_dir)
-    cmd = 'ovftool %s %s' % (ovafile, vmware_dir)
+
+    cmd = ['ovftool']
+    if accept_eula:
+        cmd.append('--acceptAllEulas')
+    cmd.append(ovafile)
+    cmd.append(vmware_dir)
+
     (rc, so, se) = run_command(cmd, use_unsafe_shell=True)
     return (cmd, rc, so, se)
 
