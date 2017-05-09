@@ -1,0 +1,51 @@
+# http://www.virtuallyghetto.com/2013/12/how-to-properly-clone-nested-esxi-vm.html
+# http://vmware.com/info?id=161
+#   chmod a+rw /dev/vmnet0
+
+- hosts: localhost
+  connection: local
+  gather_facts: False
+  vars:
+      esx_template:
+          name: esxi_65_template
+          ova: ~/Desktop/esxi_65_template.ova
+          username: root
+          password: vmware1234
+      esxi_hosts:
+          - name: esxi_65_1
+            template: esxi_65_template
+          - name: esxi_65_2
+            template: esxi_65_template
+
+  tasks:
+
+      - name: delete the existing template
+        vmware_ws_guest:
+            name: "{{ item }}"
+            state: absent
+        failed_when: False
+        with_items:
+            - "{{ esx_template.name }}"
+
+      - name: delete the existing instances
+        vmware_ws_guest:
+            name: "{{ item.name }}"
+            state: absent
+        failed_when: False
+        with_items: "{{ esxi_hosts }}"
+
+      - name: import the template ova
+        vmware_ws_guest:
+            name: "{{ esx_template.name }}"
+            state: present
+            ova: "{{ esx_template.ova }}"
+
+      - name: clone the instance(s)
+        vmware_ws_guest:
+            name: "{{ item.name }}"
+            state: poweredon
+            template: "{{ item.template }}"
+        with_items: "{{ esxi_hosts }}"
+        register: newhosts
+
+      - debug: var=newhosts

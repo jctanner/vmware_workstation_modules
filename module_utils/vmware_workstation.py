@@ -280,6 +280,7 @@ class VMwareWorkstationHelper(object):
         cmd = ['ovftool']
         if accept_eula:
             cmd.append('--acceptAllEulas')
+        cmd.append('--lax')
         cmd.append(ovafile)
         cmd.append(self.vmware_dir)
         cmd = ' '.join(cmd)
