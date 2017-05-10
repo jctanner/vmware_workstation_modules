@@ -1,0 +1,66 @@
+- name: get some facts about the guests
+  hosts: localhost
+  gather_facts: False
+  tasks:
+      - debug: var=hostvars
+      - vmware_ws_guest_facts:
+          name: "{{ vcenter.name }}"
+        register: vcenter_facts
+
+      - vmware_ws_guest_facts:
+          name: "{{ item.name }}"
+        with_items: "{{ esxi_hosts }}"
+        register: esxi_facts
+
+      - set_fact:
+          esx_ips: "{{ esxi_facts.results|map(attribute='ipaddress')|list }}"
+
+      - debug: var=esx_ips
+
+#- name: install govc
+#  hosts: localhost
+#  gather_facts: False
+#  tasks:
+#      - name: run the install
+#        script: files/govc_install.sh
+#      - set_fact:
+#          govcbin: /tmp/govc
+
+- name: setup the datacenter
+  hosts: localhost
+  gather_facts: False
+  tasks:
+
+      - name: create the datacenter
+        vmware_datacenter:
+            validate_certs: False
+            hostname: "{{ vcenter_facts.ipaddress }}"
+            username: "{{ vcenter.username }}"
+            password: "{{ vcenter.password }}"
+            datacenter_name: datacenter1
+            state: present
+
+      - name: create the cluster
+        vmware_cluster:
+            validate_certs: False
+            hostname: "{{ vcenter_facts.ipaddress }}"
+            username: "{{ vcenter.username }}"
+            password: "{{ vcenter.password }}"
+            datacenter_name: datacenter1
+            cluster_name: cluster1
+            state: present
+
+      - name: add the esx hosts to the datacenter+cluster
+        vmware_host:
+            validate_certs: False
+            hostname: "{{ vcenter_facts.ipaddress }}"
+            username: "{{ vcenter.username }}"
+            password: "{{ vcenter.password }}"
+            datacenter_name: datacenter1
+            cluster_name: cluster1
+            state: present
+            esxi_hostname: "{{ item }}"
+            esxi_username: "{{ esx_template.username }}"
+            esxi_password: "{{ esx_template.password }}"
+        with_items: "{{ esx_ips }}"
+

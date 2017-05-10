@@ -1,0 +1,54 @@
+vcenter:
+  username: administrator@vsphere.local
+  password: VMware1!
+  ova: ~/Desktop/VMware-vCenter-Server-Appliance-6.5.0.5100-4602587_OVF10.ova
+  name: VMware-vCenter-Server-Appliance-6.5.0.5100-4602587_OVF10
+  vmx: ~/vmware/VMware-vCenter-Server-Appliance-6.5.0.5100-4602587_OVF10/VMware-vCenter-Server-Appliance-6.5.0.5100-4602587_OVF10.vmx
+  vmx_entries:
+    - name: ethernet0.connectionType
+      value: nat
+      regexp: ^ethernet0.connectionType
+    - name: guestinfo.cis.deployment.node.type
+      value: embedded
+    - name: guestinfo.cis.appliance.net.addr.family
+      value: ipv4
+    - name: guestinfo.cis.appliance.net.mode
+      value: static
+    - name: guestinfo.cis.appliance.net.pnid
+      value: 192.168.49.132
+    - name: guestinfo.cis.appliance.net.addr
+      value: 192.168.49.132
+    - name: guestinfo.cis.appliance.net.prefix
+      value: 24
+    - name: guestinfo.cis.appliance.net.gateway
+      value: 192.168.49.2
+    - name: guestinfo.cis.appliance.net.dns.servers
+      value: 192.168.49.2
+    - name: guestinfo.cis.appliance.root.passwd
+      value: VMware1!
+    - name: guestinfo.cis.appliance.ssh.enabled
+      value: True
+    - name: guestinfo.cis.deployment.autoconfig
+      value: True
+    - name: guestinfo.cis.appliance.ntp.servers
+      value: pool.ntp.org
+    - name: guestinfo.cis.vmdir.password
+      value: VMware1!
+    - name: guestinfo.cis.vmdir.site-name
+      value: virtuallyGhetto
+    - name: guestinfo.cis.vmdir.domain-name
+      value: vsphere.local
+    - name: guestinfo.cis.ceip_enabled
+      value: False
+
+esx_template:
+  name: esxi_65_template
+  ova: ~/Desktop/esxi_65_template.ova
+  username: root
+  password: vmware1234
+
+esxi_hosts:
+  - name: esxi_65_1
+    template: esxi_65_template
+  - name: esxi_65_2
+    template: esxi_65_template

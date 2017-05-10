@@ -1,0 +1,32 @@
+# http://www.virtuallyghetto.com/2013/12/how-to-properly-clone-nested-esxi-vm.html
+# http://vmware.com/info?id=161
+#   chmod a+rw /dev/vmnet0
+
+- hosts: localhost
+  connection: local
+  gather_facts: False
+  tasks:
+
+      - name: get the esxi IPs
+        vmware_ws_guest_facts:
+            name: "{{ item.name }}"
+        with_items: "{{ esxi_hosts }}"
+        register: esxi_facts
+
+      - set_fact:
+          esxi_ips: "{{ esxi_facts.results|map(attribute='ipaddress')|list }}"
+
+      - add_host:
+          groups: esxinodes
+          name: "{{ item }}"
+          ansible_ssh_host: "{{ item }}"
+          ansible_ssh_user: "{{ esx_template.username }}"
+          ansible_ssh_pass: "{{ esx_template.password }}"
+        with_items: "{{ esxi_ips }}"
+
+- name: re-home the datastores
+  hosts: esxinodes
+  gather_facts: False
+  tasks:
+      - script: "{{ 'rehome.sh ' + ansible_ssh_host + ' ' + ansible_ssh_user + ' ' + ansible_ssh_pass }}"
+        delegate_to: localhost
